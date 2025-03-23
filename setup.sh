@@ -80,18 +80,15 @@ fi
 
 # Make necessary scripts executable
 chmod +x ./config/nginx/nginx-entrypoint.sh
-chmod 644 ./config/jenkins/disable-master.groovy
+chmod 644 ./config/jenkins/*
 
 # Start Jenkins and Nginx
 echo "Starting Jenkins..."
-docker compose up -d jenkins
-
-echo "Starting Nginx..."
-docker compose up -d nginx
+docker compose up -d jenkins nginx
 
 # Function to wait for Jenkins to be ready
 wait_for_jenkins() {
-  echo "Waiting for nginx to be ready..."
+  echo "Waiting for jenkins to be ready..."
   while ! curl -s -k -f https://localhost/jenkins/ > /dev/null; do
     sleep 5
   done
@@ -105,42 +102,59 @@ wait_for_jenkins
 JENKINS_ADMIN_TOKEN=${JENKINS_ADMIN_TOKEN:-admin}
 JENKINS_ADMIN_USER=${JENKINS_ADMIN_USER:-admin}
 JENKINS_URL="https://localhost/jenkins"
-AGENT_NAME="agent1"
+AGENT1_NAME="agent1"
+AGENT2_NAME="agent2"
 ENV_FILE=".env"
 
 echo "Retrieving Jenkins agent secret..."
 
 # Fetch JNLP file securely
-JNLP_RESPONSE=$(curl -s -k -u "${JENKINS_ADMIN_USER}:${JENKINS_ADMIN_TOKEN}" "$JENKINS_URL/computer/$AGENT_NAME/jenkins-agent.jnlp")
+JNLP_RESPONSE_AGENT1=$(curl -s -k -u "${JENKINS_ADMIN_USER}:${JENKINS_ADMIN_TOKEN}" "$JENKINS_URL/computer/$AGENT1_NAME/jenkins-agent.jnlp")
+JNLP_RESPONSE_AGENT2=$(curl -s -k -u "${JENKINS_ADMIN_USER}:${JENKINS_ADMIN_TOKEN}" "$JENKINS_URL/computer/$AGENT2_NAME/jenkins-agent.jnlp")
 
 # Check if we received a valid response
-if [[ -z "$JNLP_RESPONSE" ]]; then
+if [[ -z "$JNLP_RESPONSE_AGENT1" ]] && [[ -z "$JNLP_RESPONSE_AGENT2" ]]; then
   echo "ERROR: No response received from Jenkins. Is it running?"
   exit 1
-elif [[ "$JNLP_RESPONSE" == *"401"* || "$JNLP_RESPONSE" == *"403"* ]]; then
+elif [[ "$JNLP_RESPONSE_AGENT1" == *"401"* || "$JNLP_RESPONSE_AGENT1" == *"403"* ]] && [[ "$JNLP_RESPONSE_AGENT2" == *"401"* || "$JNLP_RESPONSE_AGENT2" == *"403"* ]]; then
   echo "ERROR: Authentication failed. Check your credentials."
   exit 1
 fi
 
 # Extract the agent secret (first <argument> tag contains the secret)
-JENKINS_SECRET=$(echo "$JNLP_RESPONSE" | grep -oP '(?<=<argument>)[^<]+(?=</argument>)' | sed -n '1p')
+JENKINS_SECRET_AGENT1=$(echo "$JNLP_RESPONSE_AGENT1" | grep -oP '(?<=<argument>)[^<]+(?=</argument>)' | sed -n '1p')
+JENKINS_SECRET_AGENT2=$(echo "$JNLP_RESPONSE_AGENT2" | grep -oP '(?<=<argument>)[^<]+(?=</argument>)' | sed -n '1p')
 
 # Validate extraction
-if [[ -z "$JENKINS_SECRET" ]]; then
+if [[ -z "$JENKINS_SECRET_AGENT1" ]]; then
   echo "ERROR: Failed to extract Jenkins agent secret!"
   echo "Raw JNLP response for debugging:"
-  echo "$JNLP_RESPONSE" | grep -o '<application-desc.*</application-desc>'
+  echo "$JENKINS_SECRET_AGENT1" | grep -o '<application-desc.*</application-desc>'
+  exit 1
+fi
+
+if [[ -z "$JENKINS_SECRET_AGENT2" ]]; then
+  echo "ERROR: Failed to extract Jenkins agent secret!"
+  echo "Raw JNLP response for debugging:"
+  echo "$JENKINS_SECRET_AGENT2" | grep -o '<application-desc.*</application-desc>'
   exit 1
 fi
 
 # Debug output (first 5 characters only for security)
-echo "Retrieved secret: ${JENKINS_SECRET:0:5}... (hidden for security)"
+echo "Retrieved secret for agent 1: ${JENKINS_SECRET_AGENT1:0:5}... (hidden for security)"
+echo "Retrieved secret for agent 2: ${JENKINS_SECRET_AGENT2:0:5}... (hidden for security)"
 
 # Store or update JENKINS_SECRET in .env
-if grep -q "^JENKINS_SECRET=" "$ENV_FILE"; then
-  sed -i.bak "s|^JENKINS_SECRET=.*|JENKINS_SECRET=$JENKINS_SECRET|" "$ENV_FILE"
+if grep -q "^JENKINS_SECRET_AGENT1=" "$ENV_FILE"; then
+  sed -i.bak "s|^JENKINS_SECRET_AGENT1=.*|JENKINS_SECRET_AGENT1=$JENKINS_SECRET_AGENT1|" "$ENV_FILE"
 else
-  echo "JENKINS_SECRET=$JENKINS_SECRET" >> "$ENV_FILE"
+  echo "JENKINS_SECRET_AGENT1=$JENKINS_SECRET_AGENT1" >> "$ENV_FILE"
+fi
+
+if grep -q "^JENKINS_SECRET_AGENT2=" "$ENV_FILE"; then
+  sed -i.bak "s|^JENKINS_SECRET_AGENT2=.*|JENKINS_SECRET_AGENT2=$JENKINS_SECRET_AGENT2|" "$ENV_FILE"
+else
+  echo "JENKINS_SECRET_AGENT2=$JENKINS_SECRET_AGENT2" >> "$ENV_FILE"
 fi
 
 echo "Jenkins agent secret successfully retrieved and stored in $ENV_FILE"
