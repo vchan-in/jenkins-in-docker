@@ -6,22 +6,22 @@ services:
     user: root
     privileged: true
     environment:
-      JENKINS_OPTS: "--prefix=/jenkins"
-      JAVA_OPTS: "-Djenkins.model.Jenkins.slaveAgentPort=50000"
+      JENKINS_OPTS: "--prefix=/jenkins --argumentsRealm.roles.user=${JENKINS_ADMIN_USER} --argumentsRealm.passwd.admin=${JENKINS_ADMIN_TOKEN} --argumentsRealm.roles.admin=admin"
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false -Djenkins.model.Jenkins.slaveAgentPort=50000"
       JENKINS_ADMIN_USER: ${JENKINS_ADMIN_USER}
       JENKINS_ADMIN_TOKEN: ${JENKINS_ADMIN_TOKEN}
       JENKINS_URL: "https://${HOST_IP}/jenkins"
     volumes:
-      - jenkins_home:/var/jenkins_home
+      - home:/var/jenkins_home
       - ./config/jenkins:/var/jenkins_home/init.groovy.d
     networks:
       - jenkins_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/jenkins/"]
-      interval: 30s
+      test: ["CMD", "curl -k -s https://192.168.4.147/jenkins/notfound | grep -q 'Not Found'"]
+      interval: 5s
       timeout: 10s
       start_period: 5s
-      retries: 5
+      retries: 10
 
   nginx:
     image: nginx:latest
@@ -29,7 +29,7 @@ services:
     restart: always
     depends_on:
       jenkins:
-        condition: service_healthy
+        condition: service_started
     ports:
       - "80:80"
       - "443:443"
@@ -44,25 +44,42 @@ services:
     networks:
       - jenkins_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "-k", "https://localhost/jenkins/"]
+      test: ["CMD", "curl", "-f", "-k", "https://localhost/"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  jenkins_agent:
+  agent1:
     image: jenkins/inbound-agent
-    container_name: jenkins-agent
-    depends_on:
-      nginx:
-        condition: service_healthy
+    container_name: agent1
     environment:
       - JENKINS_URL=http://jenkins:8080/jenkins
       - JENKINS_AGENT_NAME=agent1
-      - JENKINS_SECRET=${JENKINS_SECRET}
+      - JENKINS_SECRET=${JENKINS_SECRET_AGENT1}
       - JENKINS_AGENT_WORKDIR=/home/jenkins/agent
     restart: always
     volumes:
-      - jenkins_agent_workdir:/home/jenkins/agent
+      - agent1_workdir:/home/jenkins/agent
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - jenkins_net
+    healthcheck:
+      test: ["CMD", "pgrep", "java"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  agent2:
+    image: jenkins/inbound-agent
+    container_name: agent2
+    environment:
+      - JENKINS_URL=http://jenkins:8080/jenkins
+      - JENKINS_AGENT_NAME=agent2
+      - JENKINS_SECRET=${JENKINS_SECRET_AGENT2}
+      - JENKINS_AGENT_WORKDIR=/home/jenkins/agent
+    restart: always
+    volumes:
+      - agent2_workdir:/home/jenkins/agent
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - jenkins_net
@@ -73,9 +90,11 @@ services:
       retries: 3
 
 volumes:
-  jenkins_home:
+  home:
     driver: local
-  jenkins_agent_workdir:
+  agent1_workdir:
+    driver: local
+  agent2_workdir:
     driver: local
 
 networks:
