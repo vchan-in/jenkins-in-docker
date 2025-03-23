@@ -1,0 +1,83 @@
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    restart: always
+    user: root
+    privileged: true
+    environment:
+      JENKINS_OPTS: "--prefix=/jenkins"
+      JAVA_OPTS: "-Djenkins.model.Jenkins.slaveAgentPort=50000"
+      JENKINS_ADMIN_USER: ${JENKINS_ADMIN_USER}
+      JENKINS_ADMIN_TOKEN: ${JENKINS_ADMIN_TOKEN}
+      JENKINS_URL: "https://${HOST_IP}/jenkins"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - ./config/jenkins:/var/jenkins_home/init.groovy.d
+    networks:
+      - jenkins_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/jenkins/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:latest
+    container_name: jenkins-nginx
+    restart: always
+    depends_on:
+      jenkins:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "50000:50000"
+    environment:
+      - host_ip=${HOST_IP}
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.template:ro
+      - ./config/nginx/nginx-entrypoint.sh:/docker-entrypoint.d/40-envsubst-nginx-config.sh:ro
+      - ./config/nginx/certs:/etc/ssl/certs:ro
+      - ./config/nginx/certs:/etc/ssl/private:ro
+    networks:
+      - jenkins_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost/jenkins/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  jenkins_agent:
+    image: jenkins/inbound-agent
+    container_name: jenkins-agent
+    depends_on:
+      nginx:
+        condition: service_healthy
+    environment:
+      - JENKINS_URL=http://jenkins:8080/jenkins
+      - JENKINS_AGENT_NAME=agent1
+      - JENKINS_SECRET=${JENKINS_SECRET}
+      - JENKINS_AGENT_WORKDIR=/home/jenkins/agent
+    restart: always
+    volumes:
+      - jenkins_agent_workdir:/home/jenkins/agent
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - jenkins_net
+    healthcheck:
+      test: ["CMD", "pgrep", "java"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  jenkins_home:
+    driver: local
+  jenkins_agent_workdir:
+    driver: local
+
+networks:
+  jenkins_net:
+    driver: bridge
