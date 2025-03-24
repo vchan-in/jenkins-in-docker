@@ -6,14 +6,17 @@ services:
     user: root
     privileged: true
     environment:
-      JENKINS_OPTS: "--prefix=/jenkins --argumentsRealm.roles.user=${JENKINS_ADMIN_USER} --argumentsRealm.passwd.admin=${JENKINS_ADMIN_TOKEN} --argumentsRealm.roles.admin=admin"
+      JENKINS_OPTS: --prefix=/jenkins
       JAVA_OPTS: "-Djenkins.install.runSetupWizard=false -Djenkins.model.Jenkins.slaveAgentPort=50000"
+      # JENKINS_OPTS: "--prefix=/jenkins/ --resourceRoot https://${HOST_IP}/jenkins/static/ --argumentsRealm.roles.user=${JENKINS_ADMIN_USER} --argumentsRealm.passwd.admin=${JENKINS_ADMIN_TOKEN} --argumentsRealm.roles.admin=admin"
+      # JAVA_OPTS: "-Djenkins.install.runSetupWizard=false -Djenkins.model.Jenkins.slaveAgentPort=50000"
+      HOST_IP: ${HOST_IP}
       JENKINS_ADMIN_USER: ${JENKINS_ADMIN_USER}
       JENKINS_ADMIN_TOKEN: ${JENKINS_ADMIN_TOKEN}
       JENKINS_URL: "https://${HOST_IP}/jenkins"
     volumes:
       - home:/var/jenkins_home
-      - ./config/jenkins:/var/jenkins_home/init.groovy.d
+      - ./config/jenkins/init:/var/jenkins_home/init.groovy.d
     networks:
       - jenkins_net
     healthcheck:
@@ -50,10 +53,10 @@ services:
       retries: 3
 
   agent1:
-    image: jenkins/inbound-agent
+    image: jenkins-agent:latest
     container_name: agent1
     environment:
-      - JENKINS_URL=http://jenkins:8080/jenkins
+      - JENKINS_URL=https://${HOST_IP}/jenkins
       - JENKINS_AGENT_NAME=agent1
       - JENKINS_SECRET=${JENKINS_SECRET_AGENT1}
       - JENKINS_AGENT_WORKDIR=/home/jenkins/agent
@@ -70,10 +73,10 @@ services:
       retries: 3
 
   agent2:
-    image: jenkins/inbound-agent
+    image: jenkins-agent:latest
     container_name: agent2
     environment:
-      - JENKINS_URL=http://jenkins:8080/jenkins
+      - JENKINS_URL=https://${HOST_IP}/jenkins
       - JENKINS_AGENT_NAME=agent2
       - JENKINS_SECRET=${JENKINS_SECRET_AGENT2}
       - JENKINS_AGENT_WORKDIR=/home/jenkins/agent
@@ -91,11 +94,8 @@ services:
 
 volumes:
   home:
-    driver: local
   agent1_workdir:
-    driver: local
   agent2_workdir:
-    driver: local
 
 networks:
   jenkins_net:
