@@ -8,8 +8,6 @@ services:
     environment:
       JENKINS_OPTS: --prefix=/jenkins
       JAVA_OPTS: "-Djenkins.install.runSetupWizard=false -Djenkins.model.Jenkins.slaveAgentPort=50000"
-      # JENKINS_OPTS: "--prefix=/jenkins/ --resourceRoot https://${HOST_IP}/jenkins/static/ --argumentsRealm.roles.user=${JENKINS_ADMIN_USER} --argumentsRealm.passwd.admin=${JENKINS_ADMIN_TOKEN} --argumentsRealm.roles.admin=admin"
-      # JAVA_OPTS: "-Djenkins.install.runSetupWizard=false -Djenkins.model.Jenkins.slaveAgentPort=50000"
       HOST_IP: ${HOST_IP}
       JENKINS_ADMIN_USER: ${JENKINS_ADMIN_USER}
       JENKINS_ADMIN_TOKEN: ${JENKINS_ADMIN_TOKEN}
@@ -20,7 +18,7 @@ services:
     networks:
       - jenkins_net
     healthcheck:
-      test: ["CMD", "curl -k -s https://192.168.4.147/jenkins/notfound | grep -q 'Not Found'"]
+      test: ["CMD", "curl -k -s https://${HOST_IP}/jenkins/login"]
       interval: 5s
       timeout: 10s
       start_period: 5s
@@ -47,7 +45,7 @@ services:
     networks:
       - jenkins_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "-k", "https://localhost/"]
+      test: ["CMD", "curl", "-f", "-k", "https://${HOST_IP}/jenkins/login"]
       interval: 30s
       timeout: 10s
       retries: 3
