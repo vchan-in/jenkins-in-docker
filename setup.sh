@@ -6,8 +6,13 @@ ENV_FILE=".env"
 
 # Ensure the .env file exists
 if [ ! -f "$ENV_FILE" ]; then
-  echo ".env file not found! Please ensure .env is present with HOST_IP key."
-  exit 1
+  # Copy env.example to .env if it doesn't exist
+  echo "Copying env.example to .env..."
+  cp env.example "$ENV_FILE"
+  if [ $? -ne 0 ]; then
+    echo "ERROR: Failed to copy env.example to .env!"
+    exit 1
+  fi
 fi
 
 # Load environment variables from .env
