@@ -8,6 +8,22 @@ def instance = Jenkins.getInstance()
 
 def pluginList = [
     "instance-identity",
+    "git",
+    "github",
+    "credentials",
+    "job-dsl",
+    "configuration-as-code",
+    "gradle",
+    "nodejs",
+    "docker-workflow",
+    "role-strategy",
+    "matrix-auth",
+    "htmlpublisher",
+    "email-ext",
+    "metrics",
+    "throttle-concurrents",
+    "timestamper",
+    "blueocean"
 ]
 
 def pm = instance.getPluginManager()
