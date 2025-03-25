@@ -65,9 +65,13 @@ CERT_PATH="$CERT_DIR/$CERT_FILE"
 KEY_PATH="$CERT_DIR/$KEY_FILE"
 CRT_PATH="$CERT_DIR/${CERT_FILE%.*}.crt"
 
-# Create a temporary OpenSSL config file with SAN
-OPENSSL_CONFIG=$(mktemp)
-cat > "$OPENSSL_CONFIG" <<EOF
+# Check if certs directory is empty
+if [ -z "$(ls -A "$CERT_DIR")" ]; then
+  echo "No certificates found in $CERT_DIR. Generating self-signed SSL certificate..."
+
+  # Create a temporary OpenSSL config file with SAN
+  OPENSSL_CONFIG=$(mktemp)
+  cat > "$OPENSSL_CONFIG" <<EOF
 [req]
 distinguished_name = req_distinguished_name
 x509_extensions = v3_req
@@ -93,41 +97,45 @@ IP.1 = $HOST_IP
 IP.2 = 127.0.0.1
 EOF
 
-# Always recreate the self-signed certificate
-echo "Generating self-signed SSL certificate with SAN..."
-if ! openssl req -x509 -nodes -days "$CERT_DAYS" \
-  -newkey rsa:2048 \
-  -keyout "$KEY_PATH" \
-  -out "$CERT_PATH" \
-  -config "$OPENSSL_CONFIG" 2>/dev/null; then
-  echo "ERROR: OpenSSL certificate generation failed!"
+  echo "Generating self-signed SSL certificate with SAN..."
+  if ! openssl req -x509 -nodes -days "$CERT_DAYS" \
+    -newkey rsa:2048 \
+    -keyout "$KEY_PATH" \
+    -out "$CERT_PATH" \
+    -config "$OPENSSL_CONFIG" 2>/dev/null; then
+    echo "ERROR: OpenSSL certificate generation failed!"
+    rm -f "$OPENSSL_CONFIG"
+    exit 1
+  fi
+
+  echo "Certificate generated at $CERT_PATH"
+  echo "Key generated at $KEY_PATH"
+
+  # Clean up the temporary config file
   rm -f "$OPENSSL_CONFIG"
-  exit 1
+
+  # Generate .crt file from the certificate
+  echo "Converting certificate to .crt format..."
+  if ! openssl x509 -outform der -in "$CERT_PATH" -out "$CRT_PATH" 2>/dev/null; then
+    echo "ERROR: Failed to convert certificate to .crt format!"
+    exit 1
+  fi
+
+  echo "CRT certificate generated at $CRT_PATH"
+
+  # Verify certificates were created properly
+  if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ] || [ ! -f "$CRT_PATH" ]; then
+    echo "ERROR: Failed to generate SSL certificates!"
+    exit 1
+  fi
+
+  # Copy the .crt file to the location expected by the Dockerfile
+  echo "Copying certificate for Docker image build..."
+  mkdir -p ./config/nginx/certs/
+  cp "$CRT_PATH" ./config/nginx/certs/self-signed.crt
+else
+  echo "Certificate directory $CERT_DIR is not empty, skipping certificate generation."
 fi
-echo "Certificate generated at $CERT_PATH"
-echo "Key generated at $KEY_PATH"
-
-# Clean up the temporary config file
-rm -f "$OPENSSL_CONFIG"
-
-# Generate .crt file from the certificate
-echo "Converting certificate to .crt format..."
-if ! openssl x509 -outform der -in "$CERT_PATH" -out "$CRT_PATH" 2>/dev/null; then
-  echo "ERROR: Failed to convert certificate to .crt format!"
-  exit 1
-fi
-echo "CRT certificate generated at $CRT_PATH"
-
-# Verify certificates were created properly
-if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ] || [ ! -f "$CRT_PATH" ]; then
-  echo "ERROR: Failed to generate SSL certificates!"
-  exit 1
-fi
-
-# Copy the .crt file to the location expected by the Dockerfile
-echo "Copying certificate for Docker image build..."
-mkdir -p ./config/nginx/certs/
-cp "$CRT_PATH" ./config/nginx/certs/self-signed.crt
 
 # Check if the custom Jenkins agent image already exists
 if ! docker image inspect jenkins-custom-agent:latest >/dev/null 2>&1; then
