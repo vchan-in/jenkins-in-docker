@@ -4,6 +4,9 @@ FROM jenkins/inbound-agent:latest
 # Switch to root to install the certificate
 USER root
 
+# Install Docker
+RUN apt-get update && apt-get install -y docker.io
+
 # Copy your self-signed certificate into the container's trusted certificates folder.
 COPY ./config/nginx/certs/self-signed.crt /tmp/jenkins.crt
 
