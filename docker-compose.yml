@@ -53,6 +53,8 @@ services:
   agent1:
     image: jenkins-agent:latest
     container_name: agent1
+    user: root
+    privileged: true
     environment:
       - JENKINS_URL=https://${HOST_IP}/jenkins
       - JENKINS_AGENT_NAME=agent1
@@ -73,6 +75,8 @@ services:
   agent2:
     image: jenkins-agent:latest
     container_name: agent2
+    user: root
+    privileged: true
     environment:
       - JENKINS_URL=https://${HOST_IP}/jenkins
       - JENKINS_AGENT_NAME=agent2
